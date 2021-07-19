@@ -5,7 +5,7 @@ import json
 import os
 import tempfile
 
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request
 from google.api_core.exceptions import NotFound
 from google.cloud import storage
 from werkzeug.exceptions import InternalServerError, HTTPException
@@ -64,13 +64,15 @@ def create_app():
         return response
 
     # Return file data if found
-    @app.route('/image/<filename>', methods=['GET'])
+    @app.route('/file/<filename>', methods=['GET'])
     def file_server(filename=None):
 
         storageClient = storage.Client()
         bucket = storageClient.get_bucket(GOOGLE_BUCKET)
+        download = request.args.get('download', '')
+        download = download.lower() == 'true'
 
-        blob = bucket.blob(filename)
+        blob = bucket.blob(os.path.join('public', filename))
         # /temp dir is the only available filespace that is writable in app env
         # TODO: look at doing this all in memory to negate file io
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -79,7 +81,7 @@ def create_app():
                 blob.download_to_filename(fullpath)
             except NotFound:
                 raise FileNotFound()
-            return send_from_directory(tmpdirname, filename)
+            return send_from_directory(tmpdirname, filename, as_attachment=download)
 
     return app
 
